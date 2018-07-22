@@ -39,7 +39,16 @@ class OutputObject:
         self.output_object_name = output_object_name
         self.output_object_prefix_name = output_object_prefix_name
         self.output_file_delimiter = output_file_delimiter
+        
+    def set_output_object_prefix_name(self, output_object_prefix_name):
+        self.output_object_prefix_name = output_object_prefix_name
 
+    def set_output_object_name(self, output_object_name):
+        self.output_object_name = output_object_name
+        
+    def set_output_file_delimiter(self, output_file_delimiter):
+        self.output_file_delimiter = output_file_delimiter        
+    
 
 class RandomForestClassifier:
     def __init__(self, n_estimators=10, criterion="gini", max_depth=None, min_samples_split=2,
@@ -68,7 +77,7 @@ class RandomForestClassifier:
 
 class KMeans:
     def __init__(self, n_clusters, init='k-means++', precompute_distances='auto',
-                 n_init=10, max_iter=300, verbose=False, tol=1e-4,
+                 n_init=10, max_iter=300, verbose=0, tol=1e-4,
                  random_state=None, copy_x=True, n_jobs=1, algorithm="auto"):
         self.n_clusters = n_clusters
         self.init = init
@@ -93,7 +102,9 @@ class EstimatorClient:
                         "estimator_params": estimator.__dict__, **kwargs}
 
         response = requests.post(self.train_endpoint, json=payload_dict)
-        model_object.set_model_object_prefix_name(response.text)
+        body = response.json()
+        model_object.set_model_object_prefix_name(body.get('model_object_prefix_name'))
+        model_object.set_model_object_name(body.get('model_object_name'))
         
         return model_object
 
@@ -102,4 +113,10 @@ class EstimatorClient:
                         **output_object.__dict__}
 
         response = requests.post(self.predict_endpoint, json=payload_dict)
-
+        body = response.json()
+        output_object.set_output_object_prefix_name(body.get('output_object_prefix_name'))
+        output_object.set_output_object_name(body.get('output_object_name'))
+        output_object.set_output_file_delimiter(body.get('output_file_delimiter'))
+        
+        return output_object
+    

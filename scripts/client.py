@@ -1,3 +1,4 @@
+import json
 import requests
 
 
@@ -51,11 +52,12 @@ class OutputObject:
     
 
 class RandomForestClassifier:
-    def __init__(self, n_estimators=10, criterion="gini", max_depth=None, min_samples_split=2,
-                 min_samples_leaf=1, min_weight_fraction_leaf=0., max_features="auto",
+    def __init__(self, name='RandomForestClassifier', n_estimators=10, criterion="gini", max_depth=None, 
+                 min_samples_split=2, min_samples_leaf=1, min_weight_fraction_leaf=0., max_features="auto",
                  max_leaf_nodes=None, min_impurity_decrease=0., min_impurity_split=None,
                  bootstrap=True, oob_score=False, n_jobs=1, random_state=None,
                  verbose=0, warm_start=False, class_weight=None):
+        self.name = name
         self.n_estimators = n_estimators
         self.criterion = criterion
         self.max_depth = max_depth
@@ -76,9 +78,10 @@ class RandomForestClassifier:
 
 
 class KMeans:
-    def __init__(self, n_clusters, init='k-means++', precompute_distances='auto',
+    def __init__(self, n_clusters, name='KMeans', init='k-means++', precompute_distances='auto',
                  n_init=10, max_iter=300, verbose=0, tol=1e-4,
                  random_state=None, copy_x=True, n_jobs=1, algorithm="auto"):
+        self.name = name
         self.n_clusters = n_clusters
         self.init = init
         self.precompute_distances = precompute_distances
@@ -93,30 +96,46 @@ class KMeans:
 
 
 class EstimatorClient:
-    def __init__(self, train_endpoint, predict_endpoint):
-        self.train_endpoint = train_endpoint
-        self.predict_endpoint = predict_endpoint
+    def __init__(self, endpoint, port, secure=False):
+        self.endpoint = endpoint
+        self.port = port
+        if secure:
+            self.protocol = 'https'
+        else:
+            self.protocol = 'http'
 
     def fit(self, estimator, storage_client, train_data_object, model_object, **kwargs):
         payload_dict = {**storage_client.__dict__, **train_data_object.__dict__, **model_object.__dict__,
-                        "estimator_params": estimator.__dict__, **kwargs}
+                        'estimator_params': estimator.__dict__, **kwargs, 'lb_planner_endpoint': self.endpoint}
+        
+        if estimator.name == 'RandomForestClassifier':
+            endpoint_url = self.protocol + '://' + self.endpoint + ':' + self.port + '/r/rfc-planner/train'
+        elif estimator.name == 'KMeans':
+            endpoint_url = self.protocol + '://' + self.endpoint + ':' + self.port + '/r/km-planner/train'
 
-        response = requests.post(self.train_endpoint, json=payload_dict)
-        body = response.json()
-        model_object.set_model_object_prefix_name(body.get('model_object_prefix_name'))
-        model_object.set_model_object_name(body.get('model_object_name'))
+        response = requests.post(endpoint_url, json=payload_dict)
+
+        body = json.loads(response.json())
+        model_object.set_model_object_prefix_name(body['model_object_prefix_name'])
+        model_object.set_model_object_name(body['model_object_name'])
         
         return model_object
 
-    def predict(self, storage_client, predict_data_object, model_object, output_object):
+    def predict(self, name, storage_client, predict_data_object, model_object, output_object):
         payload_dict = {**storage_client.__dict__, **predict_data_object.__dict__, **model_object.__dict__,
-                        **output_object.__dict__}
+                        **output_object.__dict__, 'lb_planner_endpoint': self.endpoint}
 
-        response = requests.post(self.predict_endpoint, json=payload_dict)
-        body = response.json()
-        output_object.set_output_object_prefix_name(body.get('output_object_prefix_name'))
-        output_object.set_output_object_name(body.get('output_object_name'))
-        output_object.set_output_file_delimiter(body.get('output_file_delimiter'))
+        if name == 'RandomForestClassifier':
+            endpoint_url = self.protocol + '://' + self.endpoint + ':' + self.port + '/r/rfc-planner/predict'
+        elif name == 'KMeans':
+            endpoint_url = self.protocol + '://' + self.endpoint + ':' + self.port + '/r/km-planner/predict'
+
+        response = requests.post(endpoint_url, json=payload_dict)
+
+        body = json.loads(response.json())
+        output_object.set_output_object_prefix_name(body['output_object_prefix_name'])
+        output_object.set_output_object_name(body['output_object_name'])
+        output_object.set_output_file_delimiter(body['output_file_delimiter'])
         
         return output_object
     
